@@ -1,0 +1,74 @@
+name: Build x360ce Application
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-cpp:
+    name: Build C++ DLL (Windows x64, MSVC v142)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x64 (MSVC v142 toolset)
+        run: |
+          msbuild x360ce_dll.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:PlatformToolset=v142 `
+            /p:WindowsTargetPlatformVersion=10.0 `
+            /m
+
+      - name: Upload C++ artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: x360ce-cpp-x64-release
+          path: |
+            x360ce/x360ce/bin64/Release/*.dll
+            x360ce/dinput8/bin64/Release/*.dll
+
+  build-dotnet:
+    name: Build .NET Application
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore x360ce.App.Beta/x360ce.App.csproj
+
+      - name: Build Engine
+        run: dotnet build x360ce.Engine/x360ce.Engine.csproj --configuration Release
+
+      - name: Build Application
+        run: |
+          dotnet build x360ce.App.Beta/x360ce.App.csproj `
+            --configuration Release `
+            --no-restore `
+            -p:SolutionDir="${{ github.workspace }}\"
+
+      - name: Upload .NET artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: x360ce-dotnet-release
+          path: x360ce.App.Beta/bin/Release/net48/
